@@ -1,8 +1,23 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Between, type FindOptionsWhere, ILike, Repository } from 'typeorm';
 import type { UpdateFotoDto } from './dto/update-foto.dto.js';
 import { Foto } from './entities/foto.entity.js';
+
+export interface FiltroFotos {
+  min: number;
+  max: number;
+  q?: string;
+  page: number;
+  limit: number;
+}
+
+export interface FotosPaginadas {
+  data: Foto[];
+  total: number;
+  page: number;
+  limit: number;
+}
 
 @Injectable()
 export class FotosService {
@@ -11,12 +26,39 @@ export class FotosService {
     private readonly fotoRepo: Repository<Foto>,
   ) {}
 
-  findAll(): Promise<Foto[]> {
-    return this.fotoRepo.find({ order: { id: 'ASC' } });
+  async findAll({ min, max, q, page, limit }: FiltroFotos): Promise<FotosPaginadas> {
+    if (min > max) {
+      throw new BadRequestException('min no puede ser mayor que max');
+    }
+    if (page < 1 || limit < 1) {
+      throw new BadRequestException('page y limit deben ser mayores que 0');
+    }
+
+    const calificacion = Between(min, max);
+    const texto = q?.trim();
+    const where: FindOptionsWhere<Foto>[] = texto
+      ? [
+          { calificacion, titulo: ILike(`%${texto}%`) },
+          { calificacion, descripcion: ILike(`%${texto}%`) },
+        ]
+      : [{ calificacion }];
+
+    const [data, total] = await this.fotoRepo.findAndCount({
+      where,
+      relations: { etiquetas: true },
+      order: { id: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return { data, total, page, limit };
   }
 
   async findOne(id: number): Promise<Foto> {
-    const foto = await this.fotoRepo.findOneBy({ id });
+    const foto = await this.fotoRepo.findOne({
+      where: { id },
+      relations: { album: true, etiquetas: true },
+    });
 
     if (!foto) {
       throw new NotFoundException(`Foto ${id} no encontrada`);
