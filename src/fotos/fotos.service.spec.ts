@@ -69,7 +69,7 @@ describe('FotosService', () => {
     expect(resultado).toEqual({ data: [{ id: 3, titulo: 'Atardecer' }], total: 12, page: 2, limit: 5 });
     expect(repo.findAndCount).toHaveBeenCalledWith(
       expect.objectContaining({
-        relations: { etiquetas: true },
+        relations: { album: true, etiquetas: true },
         order: { id: 'ASC' },
         skip: 5,
         take: 5,
@@ -80,6 +80,45 @@ describe('FotosService', () => {
   it('rechaza min mayor que max', async () => {
     await expect(
       service.findAll({ min: 5, max: 1, page: 1, limit: 10 }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('filtra por etiqueta', async () => {
+    repo.findAndCount.mockResolvedValue([[], 0]);
+
+    await service.findAll({ min: 0, max: 5, etiqueta: 'playa', page: 1, limit: 10 });
+
+    const { where } = repo.findAndCount.mock.calls[0][0];
+    expect(where).toEqual([
+      expect.objectContaining({ etiquetas: { nombre: 'playa' } }),
+    ]);
+  });
+
+  it('mantiene el filtro de etiqueta cuando también hay búsqueda', async () => {
+    repo.findAndCount.mockResolvedValue([[], 0]);
+
+    await service.findAll({ min: 0, max: 5, q: 'foto', etiqueta: 'playa', page: 1, limit: 10 });
+
+    const { where } = repo.findAndCount.mock.calls[0][0];
+    expect(where).toHaveLength(2);
+    for (const condicion of where) {
+      expect(condicion).toMatchObject({ etiquetas: { nombre: 'playa' } });
+    }
+  });
+
+  it('ordena por calificación descendente', async () => {
+    repo.findAndCount.mockResolvedValue([[], 0]);
+
+    await service.findAll({ min: 0, max: 5, orden: 'desc', page: 1, limit: 10 });
+
+    expect(repo.findAndCount).toHaveBeenCalledWith(
+      expect.objectContaining({ order: { calificacion: 'DESC', id: 'ASC' } }),
+    );
+  });
+
+  it('rechaza un orden inválido', async () => {
+    await expect(
+      service.findAll({ min: 0, max: 5, orden: 'arriba', page: 1, limit: 10 }),
     ).rejects.toThrow(BadRequestException);
   });
 });

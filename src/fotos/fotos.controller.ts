@@ -26,10 +26,12 @@ export class FotosController {
     @Query('min', new DefaultValuePipe(0), ParseFloatPipe) min: number,
     @Query('max', new DefaultValuePipe(5), ParseFloatPipe) max: number,
     @Query('q') q: string | undefined,
+    @Query('etiqueta') etiqueta: string | undefined,
+    @Query('orden') orden: string | undefined,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
   ): Promise<FotosPaginadas> {
-    return this.fotosService.findAll({ min, max, q, page, limit });
+    return this.fotosService.findAll({ min, max, q, etiqueta, orden, page, limit });
   }
 
   @Get(':id')

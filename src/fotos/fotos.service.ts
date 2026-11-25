@@ -8,6 +8,8 @@ export interface FiltroFotos {
   min: number;
   max: number;
   q?: string;
+  etiqueta?: string;
+  orden?: string;
   page: number;
   limit: number;
 }
@@ -26,7 +28,15 @@ export class FotosService {
     private readonly fotoRepo: Repository<Foto>,
   ) {}
 
-  async findAll({ min, max, q, page, limit }: FiltroFotos): Promise<FotosPaginadas> {
+  async findAll({
+    min,
+    max,
+    q,
+    etiqueta,
+    orden,
+    page,
+    limit,
+  }: FiltroFotos): Promise<FotosPaginadas> {
     if (min > max) {
       throw new BadRequestException('min no puede ser mayor que max');
     }
@@ -34,19 +44,34 @@ export class FotosService {
       throw new BadRequestException('page y limit deben ser mayores que 0');
     }
 
-    const calificacion = Between(min, max);
+    // Reto 2: ?orden=asc|desc ordena por calificación (sin orden, por id)
+    const direccion = orden?.trim().toUpperCase();
+    if (direccion && direccion !== 'ASC' && direccion !== 'DESC') {
+      throw new BadRequestException('orden debe ser asc o desc');
+    }
+
+    // Reto 1: ?etiqueta=playa filtra por la relación N:M
+    const nombreEtiqueta = etiqueta?.trim();
+    const base: FindOptionsWhere<Foto> = {
+      calificacion: Between(min, max),
+      ...(nombreEtiqueta && { etiquetas: { nombre: nombreEtiqueta } }),
+    };
+
     const texto = q?.trim();
     const where: FindOptionsWhere<Foto>[] = texto
       ? [
-          { calificacion, titulo: ILike(`%${texto}%`) },
-          { calificacion, descripcion: ILike(`%${texto}%`) },
+          { ...base, titulo: ILike(`%${texto}%`) },
+          { ...base, descripcion: ILike(`%${texto}%`) },
         ]
-      : [{ calificacion }];
+      : [base];
 
     const [data, total] = await this.fotoRepo.findAndCount({
       where,
-      relations: { etiquetas: true },
-      order: { id: 'ASC' },
+      // Reto 3: el listado incluye el álbum de cada foto
+      relations: { album: true, etiquetas: true },
+      order: direccion
+        ? { calificacion: direccion as 'ASC' | 'DESC', id: 'ASC' }
+        : { id: 'ASC' },
       skip: (page - 1) * limit,
       take: limit,
     });
