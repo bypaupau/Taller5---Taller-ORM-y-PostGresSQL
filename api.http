@@ -71,3 +71,37 @@ GET {{api}}/albumes/999/fotos
 ### id que no es número (400)
 GET {{api}}/albumes/abc/fotos
 
+### ===== Reto sesión 5: CRUD de álbumes =====
+
+### Crear álbum (201)
+POST {{api}}/albumes
+Content-Type: application/json
+
+{ "nombre": "Galápagos" }
+
+### Nombre repetido (409 gracias al TypeOrmExceptionFilter)
+POST {{api}}/albumes
+Content-Type: application/json
+
+{ "nombre": "Viajes" }
+
+### Nombre vacío (400 con mensaje en español)
+POST {{api}}/albumes
+Content-Type: application/json
+
+{ "nombre": "" }
+
+### Ver un álbum (200)
+GET {{api}}/albumes/4
+
+### Renombrar álbum (200)
+PATCH {{api}}/albumes/4
+Content-Type: application/json
+
+{ "nombre": "Galápagos 2026" }
+
+### Eliminar álbum (204): sus fotos quedan con album = null
+DELETE {{api}}/albumes/4
+
+### Álbum eliminado (404)
+GET {{api}}/albumes/4

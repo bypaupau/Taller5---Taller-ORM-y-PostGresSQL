@@ -147,3 +147,32 @@ npm test
 ```
 
 Las pruebas del servicio usan un repositorio simulado con `vi.fn()`, así que no necesitan la base de datos.
+
+## Reto de la sesión 5
+
+### 1. CRUD de álbumes
+
+Se crearon `CreateAlbumDto` y `UpdateAlbumDto` (este último con `PartialType`) y se agregaron las rutas en `/api/albumes`:
+
+| Verbo y ruta                | Éxito | Errores                          |
+| --------------------------- | ----- | -------------------------------- |
+| `POST /api/albumes`         | 201   | 400 datos inválidos, 409 nombre repetido |
+| `GET /api/albumes/:id`      | 200   | 404                              |
+| `PATCH /api/albumes/:id`    | 200   | 400, 404, 409                    |
+| `DELETE /api/albumes/:id`   | 204   | 404                              |
+
+### 2. Nombre de álbum único
+
+`nombre` tiene `unique: true`. Al repetirlo, PostgreSQL lanza el error `23505` y el `TypeOrmExceptionFilter` (`src/common/typeorm-exception.filter.ts`) lo convierte en **409 Conflict**:
+
+```json
+{ "statusCode": 409, "message": "El registro ya existe", "detalle": "Key (nombre)=(Viajes) already exists." }
+```
+
+### 3. Mensajes en español
+
+Los DTOs usan la opción `message` de cada decorador, por ejemplo `@IsNotEmpty({ message: 'El título es obligatorio' })`.
+
+### Pista: ¿qué pasa con las fotos al borrar un álbum?
+
+Como la relación en `Foto` tiene `onDelete: 'SET NULL'`, al borrar un álbum **sus fotos no se borran**: quedan con `album = null`. Si fuera `CASCADE`, se perderían todas las fotos del álbum.

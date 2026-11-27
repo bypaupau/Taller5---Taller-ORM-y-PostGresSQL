@@ -12,21 +12,29 @@ import {
 } from 'class-validator';
 
 export class CreateFotoDto {
-  @IsString() @IsNotEmpty() @MaxLength(100)
+  @IsString({ message: 'El título debe ser texto' })
+  @IsNotEmpty({ message: 'El título es obligatorio' })
+  @MaxLength(100, { message: 'El título no puede superar 100 caracteres' })
   titulo: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString({ message: 'La descripción debe ser texto' })
   descripcion?: string;
 
-  @IsNumber() @Min(0) @Max(5)
+  @IsNumber({}, { message: 'La calificación debe ser un número' })
+  @Min(0, { message: 'La calificación no puede ser menor que 0' })
+  @Max(5, { message: 'La calificación no puede ser mayor que 5' })
   calificacion: number;
 
-  @IsUrl()
+  @IsUrl({}, { message: 'La ruta debe ser una URL válida' })
   ruta: string;
 
-  @IsOptional() @IsInt()
+  @IsOptional()
+  @IsInt({ message: 'El albumId debe ser un número entero' })
   albumId?: number;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
+  @IsOptional()
+  @IsArray({ message: 'Las etiquetas deben ser una lista' })
+  @IsString({ each: true, message: 'Cada etiqueta debe ser texto' })
   etiquetas?: string[]; // ej. ["playa", "noche"]
 }
