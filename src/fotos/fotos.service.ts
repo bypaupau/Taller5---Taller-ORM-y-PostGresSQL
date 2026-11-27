@@ -54,12 +54,21 @@ export class FotosService {
       throw new BadRequestException('orden debe ser asc o desc');
     }
 
-    // Reto 1: ?etiqueta=playa filtra por la relación N:M
-    const nombreEtiqueta = etiqueta?.trim();
-    const base: FindOptionsWhere<Foto> = {
-      calificacion: Between(min, max),
-      ...(nombreEtiqueta && { etiquetas: { nombre: nombreEtiqueta } }),
-    };
+    // Reto 1: ?etiqueta=playa filtra por la relación N:M.
+    // Se hace en dos pasos: si filtráramos y cargáramos `etiquetas` en la misma
+    // consulta, el JOIN recortaría la lista y cada foto mostraría solo "playa".
+    const base: FindOptionsWhere<Foto> = { calificacion: Between(min, max) };
+    const nombreEtiqueta = etiqueta?.trim().toLowerCase();
+    if (nombreEtiqueta) {
+      const conEtiqueta = await this.fotoRepo.find({
+        select: { id: true },
+        where: { etiquetas: { nombre: nombreEtiqueta } },
+      });
+      if (conEtiqueta.length === 0) {
+        return { data: [], total: 0, page, limit };
+      }
+      base.id = In(conEtiqueta.map((foto) => foto.id));
+    }
 
     const texto = q?.trim();
     const where: FindOptionsWhere<Foto>[] = texto

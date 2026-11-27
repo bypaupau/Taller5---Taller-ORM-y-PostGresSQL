@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Repository } from 'typeorm';
+import { In, type Repository } from 'typeorm';
 import { Etiqueta } from './entities/etiqueta.entity.js';
 import { Foto } from './entities/foto.entity.js';
 import { FotosService } from './fotos.service.js';
@@ -130,18 +130,25 @@ describe('FotosService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('filtra por etiqueta', async () => {
+  it('filtra por etiqueta en dos pasos (las fotos conservan todas sus etiquetas)', async () => {
+    repo.find.mockResolvedValue([{ id: 3 }, { id: 8 }]);
     repo.findAndCount.mockResolvedValue([[], 0]);
 
-    await service.findAll({ min: 0, max: 5, etiqueta: 'playa', page: 1, limit: 10 });
+    await service.findAll({ min: 0, max: 5, etiqueta: ' Playa ', page: 1, limit: 10 });
 
+    // 1) Busca los ids de las fotos que tienen la etiqueta
+    expect(repo.find).toHaveBeenCalledWith({
+      select: { id: true },
+      where: { etiquetas: { nombre: 'playa' } },
+    });
+    // 2) Carga esas fotos por id, sin filtrar la relación etiquetas
     const { where } = repo.findAndCount.mock.calls[0][0];
-    expect(where).toEqual([
-      expect.objectContaining({ etiquetas: { nombre: 'playa' } }),
-    ]);
+    expect(where).toEqual([expect.objectContaining({ id: In([3, 8]) })]);
+    expect(where[0]).not.toHaveProperty('etiquetas');
   });
 
   it('mantiene el filtro de etiqueta cuando también hay búsqueda', async () => {
+    repo.find.mockResolvedValue([{ id: 3 }]);
     repo.findAndCount.mockResolvedValue([[], 0]);
 
     await service.findAll({ min: 0, max: 5, q: 'foto', etiqueta: 'playa', page: 1, limit: 10 });
@@ -149,8 +156,17 @@ describe('FotosService', () => {
     const { where } = repo.findAndCount.mock.calls[0][0];
     expect(where).toHaveLength(2);
     for (const condicion of where) {
-      expect(condicion).toMatchObject({ etiquetas: { nombre: 'playa' } });
+      expect(condicion).toMatchObject({ id: In([3]) });
     }
+  });
+
+  it('devuelve una lista vacía si ninguna foto tiene la etiqueta', async () => {
+    repo.find.mockResolvedValue([]);
+
+    const resultado = await service.findAll({ min: 0, max: 5, etiqueta: 'zzz', page: 1, limit: 10 });
+
+    expect(resultado).toEqual({ data: [], total: 0, page: 1, limit: 10 });
+    expect(repo.findAndCount).not.toHaveBeenCalled();
   });
 
   it('ordena por calificación descendente', async () => {
