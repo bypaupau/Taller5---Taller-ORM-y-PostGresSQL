@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Repository } from 'typeorm';
+import { Etiqueta } from './entities/etiqueta.entity.js';
 import { Foto } from './entities/foto.entity.js';
 import { FotosService } from './fotos.service.js';
 
@@ -13,6 +14,12 @@ describe('FotosService', () => {
     create: ReturnType<typeof vi.fn>;
     save: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
+    remove?: ReturnType<typeof vi.fn>;
+  };
+  let etiquetasRepo: {
+    findBy: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    save: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -24,17 +31,38 @@ describe('FotosService', () => {
       save: vi.fn(async (foto) => ({ id: 3, ...foto })),
       delete: vi.fn(),
     };
-    service = new FotosService(repo as unknown as Repository<Foto>);
+    etiquetasRepo = {
+      findBy: vi.fn(async () => [{ id: 1, nombre: 'playa' }]),
+      create: vi.fn((datos) => datos),
+      save: vi.fn(async (nuevas: { nombre: string }[]) =>
+        nuevas.map((e, i) => ({ id: 10 + i, ...e })),
+      ),
+    };
+    service = new FotosService(
+      repo as unknown as Repository<Foto>,
+      etiquetasRepo as unknown as Repository<Etiqueta>,
+    );
   });
 
-  it('crea una foto', async () => {
+  it('crea una foto con álbum y etiquetas (reutiliza las existentes)', async () => {
+    repo.findOne.mockImplementation(async ({ where }) => ({ id: where.id, titulo: 'Laguna de Quilotoa' }));
+
     const creada = await service.create({
       titulo: 'Laguna de Quilotoa',
-      descripcion: 'Excursión de fin de semana',
       calificacion: 5,
+      ruta: 'https://picsum.photos/id/1/600/400',
+      albumId: 2,
+      etiquetas: [' Playa ', 'faro', 'playa'],
     });
 
-    expect(creada).toMatchObject({ id: 3, titulo: 'Laguna de Quilotoa', calificacion: 5 });
+    expect(creada).toMatchObject({ id: 3, titulo: 'Laguna de Quilotoa' });
+    expect(etiquetasRepo.save).toHaveBeenCalledWith([{ nombre: 'faro' }]);
+    expect(repo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        album: { id: 2 },
+        etiquetas: [{ id: 1, nombre: 'playa' }, { id: 10, nombre: 'faro' }],
+      }),
+    );
   });
 
   it('actualiza parcialmente una foto', async () => {
@@ -55,10 +83,29 @@ describe('FotosService', () => {
     await expect(service.remove(99)).rejects.toThrow(NotFoundException);
   });
 
-  it('valida el título al actualizar', async () => {
-    repo.findOne.mockResolvedValue({ id: 1, titulo: 'Atardecer' });
+  it('al actualizar cambia el álbum y reemplaza las etiquetas', async () => {
+    const foto = { id: 21, titulo: 'Cerro Santa Ana', album: { id: 2 }, etiquetas: [] };
+    repo.findOne.mockResolvedValue(foto);
 
-    await expect(service.update(1, { titulo: '' })).rejects.toThrow(BadRequestException);
+    await service.update(21, { albumId: 3, etiquetas: ['playa'] });
+
+    expect(repo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        titulo: 'Cerro Santa Ana',
+        album: { id: 3 },
+        etiquetas: [{ id: 1, nombre: 'playa' }],
+      }),
+    );
+  });
+
+  it('elimina una foto existente', async () => {
+    const foto = { id: 21, titulo: 'Cerro Santa Ana' };
+    repo.findOne.mockResolvedValue(foto);
+    repo.remove = vi.fn();
+
+    await service.remove(21);
+
+    expect(repo.remove).toHaveBeenCalledWith(foto);
   });
 
   it('lista fotos con filtros y paginación', async () => {

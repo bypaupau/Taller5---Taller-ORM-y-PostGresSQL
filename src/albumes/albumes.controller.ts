@@ -2,7 +2,7 @@ import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { Album } from '../fotos/entities/album.entity.js';
 import { AlbumesService } from './albumes.service.js';
 
-@Controller('api/albumes')
+@Controller('albumes')
 export class AlbumesController {
   constructor(private readonly albumesService: AlbumesService) {}
 

@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, type FindOptionsWhere, ILike, Repository } from 'typeorm';
+import { Between, type FindOptionsWhere, ILike, In, Repository } from 'typeorm';
+import type { CreateFotoDto } from './dto/create-foto.dto.js';
 import type { UpdateFotoDto } from './dto/update-foto.dto.js';
+import { Etiqueta } from './entities/etiqueta.entity.js';
 import { Foto } from './entities/foto.entity.js';
 
 export interface FiltroFotos {
@@ -26,6 +28,8 @@ export class FotosService {
   constructor(
     @InjectRepository(Foto)
     private readonly fotoRepo: Repository<Foto>,
+    @InjectRepository(Etiqueta)
+    private readonly etiquetasRepo: Repository<Etiqueta>,
   ) {}
 
   async findAll({
@@ -92,62 +96,40 @@ export class FotosService {
     return foto;
   }
 
-  create(datos: Partial<Foto>): Promise<Foto> {
-    const foto = this.fotoRepo.create(datos);
-    return this.fotoRepo.save(foto);
+  async create({ albumId, etiquetas, ...datos }: CreateFotoDto): Promise<Foto> {
+    const foto = this.fotoRepo.create({
+      ...datos,
+      album: albumId ? { id: albumId } : null,
+      etiquetas: await this.buscarOCrearEtiquetas(etiquetas),
+    });
+    const guardada = await this.fotoRepo.save(foto);
+    return this.findOne(guardada.id);
   }
 
-  async update(id: number, updateFotoDto: UpdateFotoDto): Promise<Foto> {
-    const foto = await this.findOne(id);
+  // Reutiliza las etiquetas que ya existen y crea las nuevas
+  private async buscarOCrearEtiquetas(nombres: string[] = []): Promise<Etiqueta[]> {
+    const limpios = [...new Set(nombres.map((n) => n.trim().toLowerCase()))];
+    const existentes = await this.etiquetasRepo.findBy({ nombre: In(limpios) });
+    const nuevas = limpios
+      .filter((n) => !existentes.some((e) => e.nombre === n))
+      .map((nombre) => this.etiquetasRepo.create({ nombre }));
+    return [...existentes, ...(await this.etiquetasRepo.save(nuevas))];
+  }
 
-    if ('titulo' in updateFotoDto) {
-      foto.titulo = this.validarTitulo(updateFotoDto.titulo);
+  async update(id: number, { albumId, etiquetas, ...datos }: UpdateFotoDto): Promise<Foto> {
+    const foto = await this.findOne(id); // 404 si no existe
+    Object.assign(foto, datos);
+    if (albumId !== undefined) {
+      // albumId: null quita la foto de su álbum
+      foto.album = albumId ? ({ id: albumId } as Foto['album']) : null;
     }
-    if ('descripcion' in updateFotoDto) {
-      foto.descripcion = this.validarDescripcion(updateFotoDto.descripcion);
-    }
-    if ('calificacion' in updateFotoDto) {
-      foto.calificacion = this.validarCalificacion(updateFotoDto.calificacion);
-    }
-
-    return this.fotoRepo.save(foto);
+    if (etiquetas) foto.etiquetas = await this.buscarOCrearEtiquetas(etiquetas);
+    await this.fotoRepo.save(foto);
+    return this.findOne(id);
   }
 
   async remove(id: number): Promise<void> {
-    const foto = await this.findOne(id);
+    const foto = await this.findOne(id); // 404 si no existe
     await this.fotoRepo.remove(foto);
-  }
-
-  private validarTitulo(valor: unknown): string {
-    if (typeof valor !== 'string' || !valor.trim()) {
-      throw new BadRequestException('El título es obligatorio');
-    }
-    if (valor.trim().length > 100) {
-      throw new BadRequestException('El título no puede superar 100 caracteres');
-    }
-
-    return valor.trim();
-  }
-
-  private validarDescripcion(valor: unknown): string | null {
-    if (valor === undefined || valor === null) {
-      return null;
-    }
-    if (typeof valor !== 'string') {
-      throw new BadRequestException('La descripción debe ser texto');
-    }
-
-    return valor;
-  }
-
-  private validarCalificacion(valor: unknown): number | null {
-    if (valor === undefined || valor === null) {
-      return null;
-    }
-    if (typeof valor !== 'number' || !Number.isFinite(valor)) {
-      throw new BadRequestException('La calificación debe ser un número válido');
-    }
-
-    return valor;
   }
 }

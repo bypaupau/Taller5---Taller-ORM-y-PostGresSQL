@@ -1,0 +1,73 @@
+@api = http://localhost:3001/api
+
+### Crear foto con álbum y etiquetas (201)
+POST {{api}}/fotos
+Content-Type: application/json
+
+{
+  "titulo": "Cerro Santa Ana",
+  "calificacion": 4.8,
+  "ruta": "https://picsum.photos/id/1/600/400",
+  "albumId": 2,
+  "etiquetas": ["Ciudad", "faro"]
+}
+
+### Crear con datos inválidos (400 con lista de errores)
+POST {{api}}/fotos
+Content-Type: application/json
+
+{
+  "titulo": "",
+  "calificacion": 9,
+  "ruta": "no-url",
+  "hack": 1
+}
+
+### Actualizar parcialmente: solo la calificación (200)
+PATCH {{api}}/fotos/21
+Content-Type: application/json
+
+{ "calificacion": 2.5 }
+
+### Actualizar con dato inválido (400)
+PATCH {{api}}/fotos/21
+Content-Type: application/json
+
+{ "calificacion": 9 }
+
+### Actualizar una foto que no existe (404)
+PATCH {{api}}/fotos/999
+Content-Type: application/json
+
+{ "calificacion": 2 }
+
+### Eliminar (204 sin cuerpo)
+DELETE {{api}}/fotos/21
+
+### Comprobar que se eliminó (404)
+GET {{api}}/fotos/21
+
+### Listar con filtros (200)
+GET {{api}}/fotos?min=3&max=5&q=foto&page=1&limit=5
+
+### Límite demasiado grande (400)
+GET {{api}}/fotos?limit=999
+
+### Parámetro que no existe en el DTO (400)
+GET {{api}}/fotos?hack=1
+
+### Retos de la sesión 4 siguen funcionando (200)
+GET {{api}}/fotos?etiqueta=playa&orden=desc
+
+### Listar álbumes (200)
+GET {{api}}/albumes
+
+### Fotos de un álbum: ruta anidada (200)
+GET {{api}}/albumes/2/fotos
+
+### Álbum que no existe (404)
+GET {{api}}/albumes/999/fotos
+
+### id que no es número (400)
+GET {{api}}/albumes/abc/fotos
+
